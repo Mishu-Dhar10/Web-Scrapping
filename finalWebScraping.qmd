@@ -1,0 +1,977 @@
+---
+title: "Web Scraping- Project 1"
+author: "Mishu Dhar"
+format: pdf
+editor: visual
+---
+
+Code Chunk 1
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| include: false
+
+library(rvest)
+library(ggplot2)
+library(tidyverse)
+library(ggplot2)
+library(httr)
+library(XML)
+library(xml2)
+```
+
+Code Chunk 2
+
+```{r}
+
+library(rvest)
+library(httr)
+library(dplyr)
+
+#  URL for scraping
+url <- "https://www.wickeduncle.co.uk/popular"
+
+# Fetch the webpage content
+response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+page_content <- read_html(response)
+
+# Extract product details
+products <- html_elements(page_content, "a.inner.full-height.no-decoration") %>% 
+  map_df(~{
+    product_url <- .x %>% html_attr("href") %>% paste0("https://www.wickeduncle.co.uk", .)
+    image_url <- .x %>% html_element("img") %>% html_attr("src")  # Direct URL from 'src' attribute
+    product_name <- .x %>% html_element("h3.title") %>% html_text(trim = TRUE)
+    product_description <- .x %>% html_element("p") %>% html_text(trim = TRUE)
+    product_price <- .x %>% html_element("span.price") %>% html_text(trim = TRUE) %>% 
+                     str_extract("\\d+\\.\\d{2}") %>% as.numeric()
+
+    # Combine product information without storing image paths
+    data_frame(
+      URL = product_url,
+      ImageURL = image_url,
+      Name = product_name,
+      Description = product_description,
+      Price = product_price
+    )
+  })
+
+# Print the resulting data frame
+print(products)
+
+```
+
+Code Chunk 3
+
+```{r}
+library(rvest)
+library(httr)
+library(dplyr)
+library(stringr)
+
+#  URL for scraping
+url <- "https://www.wickeduncle.co.uk/popular"
+
+# Fetch the webpage content
+response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+page_content <- read_html(response)
+
+# Extract product details
+products <- html_elements(page_content, "a.inner.full-height.no-decoration") %>% 
+  map_df(~{
+    # Construct the full product URL by appending the base site URL
+    product_url <- .x %>% html_attr("href") %>% paste0("https://www.wickeduncle.co.uk", .)
+    # extract image
+    image_url <- .x %>% html_element("img") %>% html_attr("src")  
+    # extract product name
+    product_name <- .x %>% html_element("h3.title") %>% html_text(trim = TRUE)
+    # extract product description
+    product_description <- .x %>% html_element("p") %>% html_text(trim = TRUE)
+    # extract price
+    product_price <- .x %>% html_element("span.price") %>% html_text(trim = TRUE)  # Keep the currency symbol
+
+    # Compile product information without storing image paths
+    data_frame(
+      URL = product_url,
+      ImageURL = image_url,
+      Name = product_name,
+      Description = product_description,
+      Price = product_price
+    )
+  })
+
+# Print the resulting data frame
+print(products)
+
+```
+
+Code Chunk 4
+
+```{r}
+library(rvest)
+library(httr)
+library(dplyr)
+library(stringr)
+
+# Define the base URL for scraping
+base_url <- "https://www.wickeduncle.co.uk/popular?page="
+
+# Initialize a list to store data from each page
+all_products <- list()
+
+# Loop through the first three pages
+for (page_number in 1:3) {
+    # Construct the URL for the current page
+    url <- paste0(base_url, page_number)
+
+    # Fetch the webpage content
+    response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+    page_content <- read_html(base_url)
+
+    # Extract product details
+    products <- html_elements(page_content, "a.inner.full-height.no-decoration") %>% 
+        map_df(~{
+            product_url <- .x %>% html_attr("href") %>% paste0("https://www.wickeduncle.co.uk", .)
+            image_url <- .x %>% html_element("img") %>% html_attr("src")
+            product_name <- .x %>% html_element("h3.title") %>% html_text(trim = TRUE)
+            product_description <- .x %>% html_element("p") %>% html_text(trim = TRUE)
+            product_price <- .x %>% html_element("span.price") %>% html_text(trim = TRUE)
+
+            # Compile product information
+            data_frame(
+                URL = product_url,
+                ImageURL = image_url,
+                Name = product_name,
+                Description = product_description,
+                Price = product_price
+            )
+        })
+
+    # Append the products from the current page to the list
+    all_products[[page_number]] <- products
+}
+
+# Combine all the products into one data frame
+final_products <- bind_rows(all_products)
+
+# first few rows of the data
+head(final_products)
+
+```
+
+Code Chunk 5
+
+```{r}
+library(rvest)
+library(httr)
+library(dplyr)
+library(stringr)
+
+# Define the URL for scraping
+url <- "https://www.wickeduncle.co.uk/popular"  # Adjust this if the reviews are on a different specific page
+
+# Fetch the webpage content
+response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+page_content <- read_html(response)
+
+# Extract review details
+reviews <- html_elements(page_content, ".splide__slide") %>% 
+  map_df(~{
+    customer_name <- .x %>% html_element("figcaption b") %>% html_text(trim = TRUE)
+    main_comment <- .x %>% html_element("p.title") %>% html_text(trim = TRUE)
+    detailed_review <- .x %>% html_element("blockquote p") %>% html_text(trim = TRUE)
+    # Assuming star count can be determined by the count of 'use' elements
+    star_count <- length(html_elements(.x, "use[xlink|href='#feefostar']"))
+
+    # Compile review information
+    data_frame(
+      CustomerName = customer_name,
+      MainComment = main_comment,
+      DetailedReview = detailed_review,
+      StarRating = star_count
+    )
+  })
+
+# Print the resulting data frame
+print(reviews)
+
+####--------------------####
+
+# Not good or actual output, did not extract detailed review
+
+########################
+
+```
+
+Code chunk 6
+
+```{r}
+library(rvest)
+library(httr)
+library(dplyr)
+library(stringr)
+
+# Define the URL for scraping
+url <- "https://www.wickeduncle.co.uk/popular"  # Ensure this URL is where the reviews are actually located
+
+# Fetch the webpage content
+response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+page_content <- read_html(response)
+
+# Extract review details
+reviews <- html_elements(page_content, ".splide__slide") %>%
+  map_df(~{
+    # extract customer name
+    customer_name <- .x %>% html_element("figcaption b") %>% html_text(trim = TRUE)
+    # initial commet
+    initial_comment <- .x %>% html_element("p.title") %>% html_text(trim = TRUE)
+    # detailed review
+    detailed_review <- .x %>% html_element("blockquote p:nth-of-type(2)") %>% html_text(trim = TRUE)  # Assuming it is the second <p> tag within <blockquote>
+    review_date <- .x %>% html_element("figcaption .date") %>% html_text(trim = TRUE)
+
+    # Compile review information
+    tibble(
+      CustomerName = customer_name,
+      InitialComment = initial_comment,
+      DetailedReview = detailed_review,
+      ReviewDate = review_date
+    )
+  })
+
+# Print the resulting data frame
+print(reviews)
+
+##----------------##
+# Good output, as it is in the website, for one page
+# extracted both initial comment and detailed review
+##_______________-##
+
+```
+
+Code Chunk 7
+
+```{r}
+# Define base URL and pages to scrape
+base_url <- "https://www.wickeduncle.co.uk/popular?page="  # Update this pattern if needed
+pages <- 1:3  # Define the range of pages you want to scrape
+
+# Function to scrape a single page
+scrape_page <- function(page_number) {
+  url <- paste0(base_url, page_number)
+  response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+  page_content <- read_html(response)
+
+  reviews <- html_elements(page_content, ".splide__slide") %>%
+    map_df(~{
+      customer_name <- .x %>% html_element("figcaption b") %>% html_text(trim = TRUE)
+      initial_comment <- .x %>% html_element("p.title") %>% html_text(trim = TRUE)
+      detailed_review <- .x %>% html_element("blockquote p:nth-of-type(2)") %>% html_text(trim = TRUE)
+      review_date <- .x %>% html_element("figcaption .date") %>% html_text(trim = TRUE)
+
+      tibble(
+        CustomerName = customer_name,
+        InitialComment = initial_comment,
+        DetailedReview = detailed_review,
+        ReviewDate = review_date
+      )
+    })
+
+  return(reviews)
+}
+
+# Apply the function to each page and combine the results
+all_reviews <- map_df(pages, scrape_page)
+
+# Print all reviews
+print(all_reviews)
+
+#-------------------------------#
+# for three pages
+#-------------------------------#
+```
+
+# Set up R Selenium
+
+An attempt to extract customer reviews from the website
+
+Code chunk 7
+
+```{r}
+library(RSelenium)
+# Start the RSelenium driver using a suitable browser
+rm.driver <- rsDriver(browser = "firefox", phantomver = NULL, chromever = NULL)
+rm <- rm.driver$client
+
+
+```
+
+```{r}
+scrape_page <- function(page_number) {
+  url <- paste0("https://www.wickeduncle.co.uk/popular?page=", page_number)
+  rm$navigate(url)
+  
+  # Allow some time for the page to load completely
+  Sys.sleep(3)  # Adjust time based on network speed and page complexity
+  
+  # Locate review elements and extract the necessary information
+  review_elements <- rm$findElements(using = "css selector", value = ".splide__slide")
+  
+  reviews <- lapply(review_elements, function(element) {
+    customer_name <- element$findElement(using = 'css selector', value = "figcaption b")$getElementText()
+    initial_comment <- element$findElement(using = 'css selector', value = "p.title")$getElementText()
+    detailed_review <- element$findElement(using = 'css selector', value = "blockquote p:nth-of-type(2)")$getElementText()
+    review_date <- element$findElement(using = 'css selector', value = "figcaption .date")$getElementText()
+    
+    list(
+      CustomerName = customer_name[[1]],  # RSelenium returns elements in lists
+      InitialComment = initial_comment[[1]],
+      DetailedReview = detailed_review[[1]],
+      ReviewDate = review_date[[1]]
+    )
+  })
+  
+  # Convert the list of reviews to a data frame
+  reviews_df <- do.call(rbind.data.frame, reviews)
+  return(reviews_df)
+}
+
+```
+
+```{r}
+library(dplyr)
+
+# Define the range of pages to scrape
+pages <- 1:3
+reviews_by_selenium <- do.call(rbind, lapply(pages, scrape_page))
+
+head(reviews_by_selenium)
+
+```
+
+This output is messy. In the website the reviews are in two parts such as "Excellent service as always" is the initial comment and the rest "Great selection of toys with age suggestions which is very helpful. Speedy......" as a detailed review. But in this expected review the outputs are merged together. rvest package worked better and perfect. Though, this is definitely becauase of coding skills limitations.
+
+Another Attempt
+
+```{r}
+scrape_page <- function(page_number) {
+  url <- paste0("https://www.wickeduncle.co.uk/popular?page=", page_number)
+  rm$navigate(url)
+  
+  Sys.sleep(3)  # Ensure page is fully loaded
+
+  # Locate review elements
+  review_elements <- rm$findElements(using = "css selector", value = ".splide__slide")
+
+  reviews <- lapply(review_elements, function(element) {
+    customer_name <- element$findElement(using = 'css selector', value = "figcaption b")$getElementText()[[1]]
+    initial_comment <- element$findElement(using = 'css selector', value = "p.title")$getElementText()[[1]]
+    detailed_review <- element$findElement(using = 'css selector', value = "blockquote p:nth-of-type(2)")$getElementText()[[1]]
+    review_date <- element$findElement(using = 'css selector', value = "figcaption .date")$getElementText()[[1]]
+    
+    # Strip new lines or concatenate characters if necessary
+    customer_name <- gsub("\n", " ", customer_name)
+    initial_comment <- gsub("\n", " ", initial_comment)
+    detailed_review <- gsub("\n", " ", detailed_review)
+    review_date <- gsub("\n", " ", review_date)
+
+    data.frame(
+      CustomerName = customer_name,
+      InitialComment = initial_comment,
+      DetailedReview = detailed_review,
+      ReviewDate = review_date
+    )
+  })
+  
+  # Combine individual review data frames
+  reviews_df <- do.call(rbind, reviews)
+  return(reviews_df)
+}
+
+# Scrape across specified pages
+reviews_another <- do.call(rbind, lapply(1:3, scrape_page))
+
+#---------------------#
+# did not worked well
+#------------------------#
+
+head(reviews_another, 3)
+```
+
+Again all are together
+
+# Another attempt with Selenium, application of regular expression, for cleaning
+
+```{r}
+
+
+scrape_page <- function(page_number) {
+  url <- paste0("https://www.wickeduncle.co.uk/popular?page=", page_number)
+  rm$navigate(url)
+  
+  # Allow some time for the page to load completely
+  Sys.sleep(3)  # Adjust time based on network speed and page complexity
+  
+  # Locate review elements and extract the necessary information
+  review_elements <- rm$findElements(using = "css selector", value = ".splide__slide")
+
+  reviews <- lapply(review_elements, function(element) {
+    # Extract elements based on the specified structure
+    customer_name <- element$findElement(using = 'css selector', value = "figcaption b")$getElementText()[[1]]
+    initial_comment <- element$findElement(using = 'css selector', value = "p.title")$getElementText()[[1]]
+    detailed_review <- element$findElement(using = 'css selector', value = "blockquote p:nth-child(2)")$getElementText()[[1]]
+    review_date <- element$findElement(using = 'css selector', value = "figcaption .date")$getElementText()[[1]]
+    
+    # Clean up new lines or concatenate characters if necessary
+    customer_name <- gsub("\n", " ", customer_name)
+    initial_comment <- gsub("\n", " ", initial_comment)
+    detailed_review <- gsub("\n", " ", detailed_review)
+    review_date <- gsub("\n", " ", review_date)
+
+    data.frame(
+      CustomerName = customer_name,
+      InitialComment = initial_comment,
+      DetailedReview = detailed_review,
+      ReviewDate = review_date
+    )
+  })
+  
+  # Combine individual review data frames
+  reviews_df <- do.call(rbind, reviews)
+  return(reviews_df)
+}
+
+# Define the range of pages to scrape
+pages <- 1:3
+reviews_3 <- do.call(rbind, lapply(pages, scrape_page))
+
+# Properly close RSelenium
+#rm$close()                  
+#rm.driver$server$stop()
+
+
+```
+
+```{r}
+head(reviews_3, 3)
+```
+
+This output is better but still all together (initial comment and detailed review).
+
+```{r}
+library(RSelenium)
+
+# Assuming that the RSelenium driver is already started and called rm.driver
+# rm.driver <- rsDriver(browser = "firefox", port = 4444)
+# rm <- rm.driver$client
+
+scrape_page <- function(page_number) {
+  url <- paste0("https://www.wickeduncle.co.uk/popular?page=", page_number)
+  rm$navigate(url)
+  
+  Sys.sleep(3)  # Ensure page is fully loaded
+  
+  review_elements <- rm$findElements(using = "css selector", value = ".splide__slide figure.review")
+
+  reviews <- lapply(review_elements, function(element) {
+    initial_comment <- element$findElement(using = 'css selector', value = "p.title")$getElementText()[[1]]
+    detailed_review <- element$findElement(using = 'css selector', value = "blockquote p:not(.title)")$getElementText()[[1]]
+    review_date <- element$findElement(using = 'css selector', value = "figcaption .date")$getElementText()[[1]]
+
+    data.frame(
+      InitialComment = initial_comment,
+      DetailedReview = detailed_review,
+      ReviewDate = review_date
+    )
+  })
+  
+  reviews_df <- do.call(rbind, reviews)
+  return(reviews_df)
+}
+
+
+# Define the range of pages to scrape
+pages <- 1:3
+reviews_4 <- do.call(rbind, lapply(pages, scrape_page))
+
+# Print or return the results
+#print(all_reviews)
+
+```
+
+```{r}
+head(reviews_4, 3)
+```
+
+```{r}
+#---------------------#
+# Failed Attempt
+#---------------------#
+
+library(RSelenium)
+library(stringr)  # For string manipulation with regex
+
+scrape_page <- function(page_number) {
+  url <- paste0("https://www.wickeduncle.co.uk/popular?page=", page_number)
+  rm$navigate(url)
+  
+  Sys.sleep(3)  # Allow the page to fully load
+  
+  review_elements <- rm$findElements(using = "css selector", value = ".splide__slide")
+
+  reviews <- lapply(review_elements, function(element) {
+    # Extract full text
+    full_text <- element$getText()[[1]]
+
+    # Use regex to remove 'Recent Customer' and extract date
+    full_text <- gsub("Recent Customer", "", full_text)
+    date <- str_extract(full_text, "\\d{1,2} \\w+ \\d{4}$")
+    review <- str_replace(full_text, "\\d{1,2} \\w+ \\d{4}$", "")  # Remove date from the review
+
+    data.frame(
+      Review = review,
+      ReviewDate = date
+    )
+  })
+
+  reviews_df <- do.call(rbind, reviews)
+  return(reviews_df)
+}
+
+# Example usage
+pages <- 1:3
+new_all_reviews <- do.call(rbind, lapply(pages, scrape_page))
+
+
+```
+
+```{r}
+library(RSelenium)
+library(stringr)  # For string manipulation with regex
+
+scrape_page <- function(page_number) {
+  url <- paste0("https://www.wickeduncle.co.uk/popular?page=", page_number)
+  rm$navigate(url)
+  
+  Sys.sleep(3)  # Allow the page to fully load
+  
+  review_elements <- rm$findElements(using = "css selector", value = ".splide__slide")
+  
+  reviews <- lapply(review_elements, function(element) {
+    # Extract full text
+    full_text <- element$getElementText()[[1]]  # Correct method to get text
+    
+    # Use regex to clean up 'Recent Customer' and separate the review text from the date
+    full_text <- gsub("Recent Customer", "", full_text, fixed = TRUE)
+    date <- str_extract(full_text, "\\d{1,2} \\w+ \\d{4}$")
+    # remove date from the review
+    review <- str_replace(full_text, "\\d{1,2} \\w+ \\d{4}$", "")  # Remove date from the review
+    
+    data.frame(
+      Review = review,
+      ReviewDate = date
+    )
+  })
+  
+  reviews_df <- do.call(rbind, reviews)
+  return(reviews_df)
+}
+
+# Example usage
+pages <- 1:3
+new_all_reviews <- do.call(rbind, lapply(pages, scrape_page))
+
+```
+
+```{r}
+head(new_all_reviews)
+```
+
+# Applying regular expression to clean this output, in the detailed review column
+
+```{r}
+# Remove new lines and trim spaces from the 'Review' column
+new_all_reviews$Review <- gsub("\n+", " ", new_all_reviews$Review)  # Replace multiple new lines with a single space
+new_all_reviews$Review <- gsub("\\s+", " ", new_all_reviews$Review)  # Replace multiple spaces with a single space
+new_all_reviews$Review <- trimws(new_all_reviews$Review)  # Trim leading and trailing whitespace
+
+# first few entries of the cleaned 'Review' column
+head(new_all_reviews$Review, 2)
+
+```
+
+```{r}
+
+# Remove quotation marks or other characters at start/end of the strings
+new_all_reviews$Review <- gsub('^"|"$', '', new_all_reviews$Review)  # Remove quotes at start and end
+
+# Check the cleaned data
+head(new_all_reviews$Review, 2)
+
+```
+
+```{r}
+# More generally, to remove any non-alphanumeric characters from start and end
+# Remove non-word
+new_all_reviews$Review <- gsub('^\\W+|\\W+$', '', new_all_reviews$Review)  
+head(new_all_reviews, 2)
+```
+
+# Sentiment Analysis
+
+```{r}
+head(all_reviews, 3)
+```
+
+```{r}
+library(dplyr)
+library(tm)
+library(ggplot2)
+library(wordcloud)
+library(RColorBrewer)
+library(syuzhet)
+```
+
+```{r}
+# Basic cleaning and NA handling
+reviews <- reviews %>%
+  filter(!is.na(DetailedReview)) %>%
+  mutate(DetailedReview = tolower(DetailedReview),
+         DetailedReview = gsub("[[:punct:]]", "", DetailedReview),
+         DetailedReview = gsub("[[:digit:]]", "", DetailedReview))
+
+```
+
+```{r}
+# Create a text corpus
+corpus <- Corpus(VectorSource(reviews$DetailedReview))
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+```
+
+```{r}
+# Sentiment analysis
+sentiments <- get_nrc_sentiment(as.character(corpus))
+```
+
+```{r}
+# Create a word cloud
+wordcloud(words = corpus, min.freq = 3,
+          max.words = 50, random.order = FALSE, 
+          rot.per = 0.35, colors = brewer.pal(8, "Dark2"))
+```
+
+```{r}
+# Create a word cloud
+wordcloud(words = corpus, min.freq = 5,
+          max.words = 50, random.order = FALSE, 
+          rot.per = 0.35, colors = brewer.pal(8, "Dark2"))
+```
+
+```{r}
+# Add a document ID to each review for tracking
+all_reviews <- all_reviews %>%
+  mutate(doc_id = row_number())
+# Optionally filter out NAs if they are not useful for your analysis
+all_reviews <- all_reviews %>%
+  filter(!is.na(DetailedReview))
+
+# Create a text corpus
+corpus <- Corpus(VectorSource(all_reviews$DetailedReview))
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+
+```
+
+```{r}
+# Extract sentiments
+sentiments <- get_nrc_sentiment(as.character(corpus))
+
+# Combine the sentiments back with the original data
+all_reviews_sentiment <- cbind(all_reviews, sentiments)
+
+```
+
+```{r}
+dtm <- TermDocumentMatrix(corpus)
+inspect(dtm[1:10, 1:5])
+
+```
+
+```{r}
+# converting into a matrix
+matrix <- as.matrix(dtm)
+words_freq <- sort(rowSums(matrix), decreasing = TRUE)
+words_df <- data.frame(word = names(words_freq), freq = words_freq)
+
+```
+
+```{r}
+ggplot(head(words_df, 10), aes(x = word, y = freq)) +
+  geom_bar(stat = "identity") +
+  xlab("Word") +
+  ylab("Frequency") +
+  coord_flip() + 
+  theme_minimal()
+
+```
+
+```{r}
+# Convert corpus to a plain text vector for analysis
+text_data <- sapply(corpus, as.character)
+
+# Get sentiment scores using NRC emotion lexicon
+sentiment_scores <- get_nrc_sentiment(text_data)
+# Convert sentiment scores to a data frame
+sentiment_df <- data.frame(sentiment_scores)
+
+# Add a document identifier if you want to keep track of which review each row corresponds to
+sentiment_df$doc_id <- seq_along(text_data)
+
+# Calculate the mean sentiment scores for visualization (optional)
+average_sentiments <- colMeans(sentiment_df[, -ncol(sentiment_df)])   
+
+
+ggplot(average_sentiments_df, aes(x = sentiment, y = score)) +
+    geom_bar(stat = "identity", fill = "skyblue") +  # Create bars with 'skyblue' color
+    ggtitle("Average Sentiment Scores") +  # Add a title to the plot
+    xlab("Sentiment") +  # Label for the x-axis
+    ylab("Average Score") +  # Label for the y-axis
+    theme_minimal() +  # Apply a minimal theme
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),  
+          axis.text.x = element_text(angle = 45, hjust = 1))  
+
+```
+
+```{r}
+average_sentiments_df <- average_sentiments_df %>%
+  arrange(desc(score)) %>%
+  mutate(sentiment = factor(sentiment, levels = rev(sentiment)))  
+# Plotting average sentiment scores in descending order
+ggplot(average_sentiments_df, aes(x = sentiment, y = score)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  ggtitle("Average Sentiment Scores (Descending Order)") +
+  xlab("Sentiment") +
+  ylab("Average Score") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Top Products
+
+```{r}
+head(final_products)
+```
+
+```{r}
+head(final_products$Name, 3)
+```
+
+```{r}
+# remove everything from " -" to the end of the string across all entries
+final_products$product_name <- sub(" -.*", "", final_products$Name)
+
+# Display the first few entries to check the result
+head(final_products)
+
+```
+
+```{r}
+head(final_products$Price, 3)
+```
+
+```{r}
+# Remove the pound sign and convert to numeric
+final_products$Price <- as.numeric(gsub("£", "", final_products$Price))
+
+# Check the changes
+head(final_products$Price)
+
+```
+
+```{r}
+str(final_products)
+```
+
+```{r}
+
+# Arrange the data in descending order and select the top 10
+top_products <- final_products %>%
+  arrange(desc(Price)) %>%
+  top_n(10, Price) %>%
+  arrange(Price)  
+
+# Plot the data
+ggplot(top_products, aes(x = reorder(product_name, Price), y = Price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Flip coordinates to make it horizontal
+  labs(title = "Top Four Expensive Toys of Wicked Uncle Store",
+       x = "Product Name",
+       y = "Price (£)") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),  
+        panel.grid.minor = element_blank(),  
+        axis.text.x = element_text(angle = 45, hjust = 1))  
+
+
+```
+
+```{r}
+# Create the histogram plot
+price_histogram <- ggplot(final_products, aes(x = Price)) +
+  geom_histogram(binwidth = 2, fill = "blue", color = "black") +  
+  ggtitle("Distribution of Product Prices") +
+  xlab("Price") +
+  ylab("Frequency") +
+  theme_minimal()
+
+# Display the histogram
+print(price_histogram)
+```
+
+# Dominant Colors (Used in the images of the toy)
+
+For this part, I will use a dataset extracted using a Python script. The Python script and the extracted dataset will be submitted with the assignment. As mentioned in the assignment instructions to ‘seek help beyond this course,’ I utilized my experience with Python for this task.
+
+The script provided utilizes Python's Imaging Library (PIL) and scikit-learn’s KMeans clustering algorithm to analyze and determine the dominant colors in a collection of images. Each image is resized to reduce complexity and reshaped into an array of RGB values for processing. The KMeans algorithm, set to identify five clusters, finds the centroid with the highest frequency in each image, representing the dominant color. This RGB value is then converted to its closest named CSS3 color for interpretability. Results from all images are aggregated, and frequencies of each named color are compiled into a DataFrame, which is then saved as a CSV file. This process automates the identification of prevalent colors across images, streamlining data analysis and presentation.
+
+```{r}
+dominant_colors <- read.csv("/Users/mishudhar/PycharmProjects/pythonProject20/color_frequencies.csv")
+
+head(dominant_colors)
+```
+
+```{r}
+# renaming the column
+names(dominant_colors)[names(dominant_colors) == "Color.Name"] <- "color_name"
+colnames(dominant_colors)
+```
+
+```{r}
+
+# Sort the data in ascending order by Frequency
+dominant_colors <- dominant_colors[order(dominant_colors$Frequency),]
+
+# Create the bar plot
+ggplot(dominant_colors, aes(x = color_name, y = Frequency)) +
+  geom_bar(stat = "identity", fill = "steelblue") + 
+  # data as the bar heights
+  coord_flip() + 
+  labs(title = "Frequency of Dominant Colors",
+       x = "Color Name",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        axis.text.x = element_text(angle = 45, hjust = 1))   
+
+```
+
+```{r}
+
+
+# Sort the data in descending order by Frequency
+dominant_colors <- dominant_colors %>%
+  arrange(desc(Frequency))
+
+# Create the bar plot with descending order
+ggplot(dominant_colors, aes(x = reorder(color_name, -Frequency), y = Frequency)) +
+  geom_bar(stat = "identity", fill = "steelblue") +  
+  coord_flip() +  
+  labs(title = "Frequency of Dominant Colors",
+       x = "Color Name",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),  
+        axis.text.x = element_text(angle = 45, hjust = 1))   
+
+
+```
+
+# Failed Attempt
+
+Detailed description in the report.
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+# Updated URL
+url <- "https://www.prothoma.com/category/21-boimela-2024/books/filter?checkedDiscount=not&checkedPrice=0&maxPrice=1000000&minPrice=0&selectedSort=2"
+
+# Fetch the webpage content with user-agent
+response <- GET(url, user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"))
+print(status_code(response))  # Check if the request was successful
+
+# Assuming successful fetch, extract content as text
+web_content <- content(response, as = "text", encoding = "UTF-8")
+```
+
+```{r}
+# Sample HTML content
+html_content <- read_html('
+<div class="product_content_same_height" style="height: 93px;"><h2><a href="https://www.prothoma.com/product/46243/bigghaner-rajje-keno-keno-ebong-keno">বিজ্ঞানের রাজ্যে কেন কেন এবং কেন</a></h2> <h3>আব্দুল কাইয়ুম</h3> <h4><span class="price_1">২৯৬.৪০ টাকা</span> <span class="price_2">৩৮০.০০ টাকা</span></h4></div>
+
+<div class="product_content_same_height" style="height: 87px;"><h2><a href="https://www.prothoma.com/product/46591/arch-of-triumph">আর্চ অব ট্রায়াম্ফ</a></h2> <h3>এরিক মারিয়া রেমার্ক, ইসমাইল আরমান</h3> <h4><span class="price_1">৫০৭.০০ টাকা</span> <span class="price_2">৬৫০.০০ টাকা</span></h4></div>
+
+<div class="product_content_same_height" style="height: 87px;"><h2><a href="https://www.prothoma.com/product/46318/onko-o-mejhokakur-heyali">অঙ্ক ও মেজোকাকুর হেঁয়ালি</a></h2> <h3>ফারসীম মান্নান মোহাম্মদী</h3> <h4><span class="price_1">২৭৩.০০ টাকা</span> <span class="price_2">৩৫০.০০ টাকা</span></h4></div>
+')
+
+# Use rvest to parse HTML
+products <- html_nodes(html_content, ".product_content_same_height")
+
+# Extracting product details
+product_details <- data.frame(
+  Title = html_text(html_nodes(products, "h2 a")),
+  Author = html_text(html_nodes(products, "h3")),
+  OriginalPrice = html_text(html_nodes(products, ".price_1")),
+  DiscountedPrice = html_text(html_nodes(products, ".price_2")),
+  URL = html_attr(html_nodes(products, "h2 a"), "href"),
+  stringsAsFactors = FALSE
+)
+
+# Print the data frame
+print(product_details)
+
+```
+
+```{r}
+# Function to read and parse the webpage
+scrape_data <- function(url) {
+  # Read HTML content from the website
+  page <- read_html(url)
+  
+  # Parse elements: Adjust the CSS selectors based on actual content structure
+  product_nodes <- html_nodes(page, ".product_single")  # Assuming class names based on previous examples
+  
+  # Extracting product details: Titles, Authors, Prices, URLs
+  titles <- html_text(html_nodes(product_nodes, "h2 a"))
+  authors <- html_text(html_nodes(product_nodes, "h3"))
+  original_prices <- html_text(html_nodes(product_nodes, ".price_1"))
+  discounted_prices <- html_text(html_nodes(product_nodes, ".price_2"))
+  links <- html_attr(html_nodes(product_nodes, "h2 a"), "href")
+  
+  # Combine data into a data frame
+  data <- data.frame(
+    Title = titles,
+    Author = authors,
+    OriginalPrice = original_prices,
+    DiscountedPrice = discounted_prices,
+    URL = links,
+    stringsAsFactors = FALSE
+  )
+  
+  return(data)
+}
+
+# Call the function with the URL
+product_data <- scrape_data(url)
+
+head(product_data, 10)
+```
